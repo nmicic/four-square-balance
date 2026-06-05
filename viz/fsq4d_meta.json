@@ -1,0 +1,13 @@
+{
+ "n_points": 95676,
+ "shell_N": 300000000,
+ "shell_M": 60000,
+ "src": "local packed canonical-decomposition binary (not included)",
+ "src_NMAX": 1132000000,
+ "stride_bytes": 20,
+ "modes": {
+  "0": "shell cloud",
+  "1": "cone vs n",
+  "2": "multishell (normalized)"
+ }
+}

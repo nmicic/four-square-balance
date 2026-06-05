@@ -1,0 +1,13 @@
+# built C engines
+src/foursquare
+src/spread
+# generated tables / output
+src/table_*.csv
+src/table.csv
+*.foursquare_*.csv
+data/record_decompositions_generated.txt
+local/
+# python cache
+__pycache__/
+*.pyc
+.DS_Store

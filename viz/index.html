@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Four-square minimal decomposition — 4D shape space</title>
+<style>
+  body{margin:0;background:#0b0e14;color:#cdd6f4;font:14px system-ui,sans-serif;overflow:hidden}
+  #ui{position:fixed;top:10px;left:10px;background:#11151fcc;padding:12px 14px;border-radius:10px;
+      max-width:340px;line-height:1.4;backdrop-filter:blur(4px)}
+  #ui h1{font-size:15px;margin:0 0 6px}
+  .dim{color:#7f849c;font-size:12px}
+  button{background:#1e2330;color:#cdd6f4;border:1px solid #313646;border-radius:6px;
+         padding:5px 9px;margin:2px 2px 0 0;cursor:pointer;font-size:12px}
+  button.on{background:#3b5bdb;border-color:#3b5bdb;color:#fff}
+  #legend{position:fixed;bottom:10px;left:10px;background:#11151fcc;padding:8px 12px;border-radius:8px;font-size:12px}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  #warn{color:#f9e2af;font-size:12px;margin-top:6px}
+</style></head><body>
+<div id="ui">
+  <h1>4D shape space — minimal four-square decomposition</h1>
+  <div class="dim">Each n &rarr; (x,y,z,w), x&ge;y&ge;z&ge;w (most-balanced rep), plotted in the
+  sum-zero <b>shape 3-space</b>: s1=(x&minus;y)/&radic;2, s2=(x+y&minus;2z)/&radic;6, s3=(x+y+z&minus;3w)/&radic;12.</div>
+  <div style="margin-top:8px">
+    <button id="m0" class="on">Shell cloud</button>
+    <button id="m1">Cone (vs n)</button>
+    <button id="m2">Multishell</button>
+    <button id="mRays" class="on">Record rays</button>
+    <button id="mAuto">Auto-rotate</button>
+  </div>
+  <div style="margin-top:6px" id="modeInfo"></div>
+  <div id="warn"></div>
+  <div class="dim" style="margin-top:8px">drag = rotate · scroll = zoom · right-drag = pan ·
+    <span id="cnt"></span></div>
+</div>
+<div id="legend"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="fsq4d_fallback.js"></script>
+<script>
+let DATA=null;  // Float32Array, 5 per point: s1,s2,s3,val,flag(=mode*2)
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 8000); cam.position.set(40,30,70);
+const rnd=new THREE.WebGLRenderer({antialias:true}); rnd.setSize(innerWidth,innerHeight);
+rnd.setPixelRatio(devicePixelRatio); document.body.appendChild(rnd.domElement);
+const ctl=new THREE.OrbitControls(cam,rnd.domElement); ctl.enableDamping=true;
+scene.add(new THREE.AxesHelper(20));
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rnd.setSize(innerWidth,innerHeight);});
+function turbo(t){t=Math.max(0,Math.min(1,t));
+  return [Math.max(0,Math.min(1,1.5-Math.abs(2*t-1.5)*2)),
+          Math.max(0,Math.min(1,1.5-Math.abs(2*t-1.0)*2)),
+          Math.max(0,Math.min(1,1.5-Math.abs(2*t-0.4)*2))];}
+
+// record-chain rays in shape space (unit dirs). The 96*4^m and 2816*4^m chains
+// coincide in this projection (y=z type); 224*4^m is separate.
+// Coords below are already in plot order (s1, s3-up, s2).
+const RAYS=[
+  {name:"96*4^m & 2816*4^m chains (y=z)", dir:[0.5,0.816,0.289], col:0x4fd6ff},
+  {name:"224*4^m chain (x>y>z)",          dir:[0.316,0.775,0.548], col:0xffb454},
+];
+let rayGroup=null, showRays=true;
+function buildRays(){
+  if(rayGroup){scene.remove(rayGroup);} rayGroup=new THREE.Group();
+  if(showRays){
+    const L = MODE===0?150 : 36;          // match data scale per mode
+    RAYS.forEach(r=>{
+      const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),
+        new THREE.Vector3(r.dir[0]*L,r.dir[1]*L,r.dir[2]*L)]);
+      rayGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:r.col,linewidth:2})));
+    });
+  }
+  scene.add(rayGroup);
+}
+
+let cloud=null, MODE=0, auto=false;
+function build(){
+  if(cloud){scene.remove(cloud);cloud.geometry.dispose();cloud.material.dispose();}
+  const N=DATA.length/5, pos=[],col=[]; let vmin=1e9,vmax=-1e9,kept=0;
+  for(let i=0;i<N;i++){ const f=DATA[i*5+4], mode=Math.floor(f/2); if(mode!==MODE)continue;
+    const v=DATA[i*5+3]; if(v<vmin)vmin=v; if(v>vmax)vmax=v; }
+  for(let i=0;i<N;i++){ const f=DATA[i*5+4], mode=Math.floor(f/2); if(mode!==MODE)continue;
+    pos.push(DATA[i*5],DATA[i*5+2],DATA[i*5+1]);   // s1, s3 up, s2
+    const c=turbo((DATA[i*5+3]-vmin)/(vmax-vmin+1e-9)); col.push(c[0],c[1],c[2]);
+    kept++;}
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  cloud=new THREE.Points(g,new THREE.PointsMaterial({size:MODE===0?0.5:0.7,vertexColors:true,sizeAttenuation:true}));
+  scene.add(cloud);
+  document.getElementById('cnt').textContent=kept.toLocaleString()+" pts";
+  const info=["<b>Shell cloud</b> — min-points in one shell densely tile the balanced corner "+
+              "(4D nearest-neighbour&asymp;1, locally Z&#8308;). Colour=balance gap.",
+              "<b>Cone</b> — normalized shape directions for n across octaves 2&#178;&#185;..2&#179;&#8304;; they "+
+              "concentrate on the s3=(x+y+z&minus;3w) axis and the cone <b>narrows with n</b> "+
+              "&rarr; minimal rep &rarr; (m,m,m,m&#39;). Colour=bits of n.",
+              "<b>Multishell</b> — clouds at several n, each normalized by &radic;n, overlaid. "+
+              "Colour=shell index (small&rarr;large n). The same shape persists across scales."][MODE];
+  document.getElementById('modeInfo').innerHTML=info;
+  const leg=["gap low <span class='sw' style='background:#3030ff'></span>&rarr;<span class='sw' style='background:#ff3030'></span> high",
+             "bits 21 <span class='sw' style='background:#3030ff'></span>&rarr;<span class='sw' style='background:#ff3030'></span> 30",
+             "small n <span class='sw' style='background:#3030ff'></span>&rarr;<span class='sw' style='background:#ff3030'></span> large n"][MODE];
+  const rayleg = showRays ? " &nbsp;·&nbsp; rays: <span class='sw' style='background:#4fd6ff'></span>96/2816 chains <span class='sw' style='background:#ffb454'></span>224 chain" : "";
+  document.getElementById('legend').innerHTML=leg+rayleg;
+  buildRays();
+}
+function setMode(m){MODE=m;['m0','m1','m2'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===m));build();}
+document.getElementById('m0').onclick=()=>setMode(0);
+document.getElementById('m1').onclick=()=>setMode(1);
+document.getElementById('m2').onclick=()=>setMode(2);
+document.getElementById('mRays').onclick=function(){showRays=!showRays;this.classList.toggle('on',showRays);build();};
+document.getElementById('mAuto').onclick=function(){auto=!auto;this.classList.toggle('on',auto);};
+(function loop(){requestAnimationFrame(loop);
+  if(auto){ if(cloud)cloud.rotation.y+=0.003; if(rayGroup)rayGroup.rotation.y+=0.003; }
+  ctl.update(); rnd.render(scene,cam);})();
+
+// load the big binary; fall back to the embedded sample (file:// without a server)
+fetch('fsq4d_data.bin').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer();})
+  .then(buf=>{DATA=new Float32Array(buf); build();})
+  .catch(()=>{
+    const fb=window.FSQ4D_FALLBACK||[]; DATA=new Float32Array(fb.length*5);
+    fb.forEach((r,i)=>r.forEach((v,j)=>DATA[i*5+j]=v));
+    document.getElementById('warn').innerHTML=
+      "Loaded small embedded sample. For the full dataset, run "+
+      "<code>python3 -m http.server</code> in <code>viz/</code> and open "+
+      "<code>http://localhost:8000/</code>.";
+    build();
+  });
+</script></body></html>

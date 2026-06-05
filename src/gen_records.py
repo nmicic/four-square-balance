@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Deterministically GENERATE the balance-gap record table (no scanning).
+
+Why this works without searching
+---------------------------------
+The balance-gap records are, empirically (exhaustively to 10^7, and confirmed by the
+10^9 rescan), exactly:
+
+    * three SEEDS that are not on any chain:   1, 11, 53
+    * three CHAINS, one per odd part 3 / 7 / 11, on each of which
+          n      -> 4*n          (value quadruples)
+          (x,y,z,w) -> (2x,2y,2z,2w)   (canonical decomposition just DOUBLES)
+
+Doubling a representation n = x^2+y^2+z^2+w^2 gives 4n = (2x)^2+...+(2w)^2 with the same
+shape, so along a chain the canonical most-balanced decomposition is fully determined by
+its base. Hence every record row is reproducible in closed form; we only need the three
+seeds and the three chain bases (the smallest member of each chain). Everything else,
+including the gap g(n) = x - ceil(sqrt(n/4)), is then exact arithmetic (Python big ints,
+so this extends to thousands of rows / hundreds of digits).
+
+Verified vs conjectured
+-----------------------
+  status = exhaustive  : n <= 10^7   (independent exact scan; rows 1..26)
+  status = scan-1e9    : 10^7 < n <= 10^9   (covered by the exact 10^9 rescan)
+  status = chain-conj  : n > 10^9    (deterministic chain extrapolation; that these are
+                                      ALL the records out here is conjectural, not proved)
+
+Usage:  python3 src/gen_records.py [K]              (default K=1024)
+        python3 src/gen_records.py --verified-file  (writes the 37-row public file)
+
+        The default writes data/record_decompositions_generated.txt and self-checks
+        against the retained scan data/records_to_1e9_COMPLETE.txt on the verified
+        range. The --verified-file mode writes data/record_decompositions_verified.txt.
+"""
+import sys, os, math
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# seeds (not on any chain) and the smallest member of each chain (odd part 3, 7, 11)
+SEEDS = [(1, 1, 0, 0, 0), (11, 3, 1, 1, 0), (53, 6, 3, 2, 2)]
+CHAIN_BASES = [
+    (96,   8,  4,  4, 0),   # odd part 3   -> 6*4^j
+    (224, 12,  8,  4, 0),   # odd part 7   -> 14*4^j
+    (2816, 40, 24, 24, 8),  # odd part 11  -> 11*4^j
+]
+
+VERIFIED_EXHAUSTIVE = 10**7
+VERIFIED_SCAN = 10**9
+
+
+def xmin(n):
+    """ceil(sqrt(n/4)) via exact integer sqrt (works for arbitrarily large n)."""
+    x = math.isqrt((n + 3) // 4)
+    while 4 * x * x < n:
+        x += 1
+    return x
+
+
+def status(n):
+    if n <= VERIFIED_EXHAUSTIVE:
+        return "exhaustive"
+    if n <= VERIFIED_SCAN:
+        return "scan-1e9"
+    return "chain-conj"
+
+
+def generate(k):
+    """Return the first k record rows (n, x, y, z, w, g, status) sorted by n."""
+    rows = []
+    # seeds
+    for (n, x, y, z, w) in SEEDS:
+        rows.append((n, x, y, z, w))
+    # chains: keep doubling until we comfortably have enough rows past the seeds
+    for (n, x, y, z, w) in CHAIN_BASES:
+        for _ in range(k):                     # k steps per chain is always plenty
+            rows.append((n, x, y, z, w))
+            n, x, y, z, w = 4 * n, 2 * x, 2 * y, 2 * z, 2 * w
+    rows.sort(key=lambda r: r[0])
+    out = []
+    for (n, x, y, z, w) in rows[:k]:
+        assert x * x + y * y + z * z + w * w == n, ("sum check failed", n)
+        assert x >= y >= z >= w >= 0, ("order check failed", n)
+        g = x - xmin(n)
+        out.append((n, x, y, z, w, g, status(n)))
+    return out
+
+
+def crosscheck(rows):
+    """Confirm generated locations and gaps match the retained exact scan."""
+    ref = {}
+    path = os.path.join(REPO, "data", "records_to_1e9_COMPLETE.txt")
+    if not os.path.exists(path):
+        return "(no retained scan to cross-check against)"
+    with open(path) as _f:
+        ref_lines = _f.readlines()
+    for line in ref_lines:
+        if line.startswith("#") or not line.strip():
+            continue
+        p = line.split()
+        ref[int(p[0])] = int(p[1])
+    checked = mism = 0
+    for (n, x, y, z, w, g, st) in rows:
+        if n in ref:
+            checked += 1
+            if ref[n] != g:
+                mism += 1
+                print(f"  MISMATCH n={n}: generated g={g} scan g={ref[n]}")
+    missing = [n for n in ref if n not in {row[0] for row in rows}]
+    if missing:
+        return f"cross-checked {checked} rows vs retained scan: {mism} mismatches; missing {len(missing)} scan rows"
+    return f"cross-checked {checked} rows vs retained scan: {mism} mismatches"
+
+
+def main():
+    verified_file = len(sys.argv) > 1 and sys.argv[1] == "--verified-file"
+    k = 37 if verified_file else (int(sys.argv[1]) if len(sys.argv) > 1 else 1024)
+    rows = generate(k)
+    print(crosscheck(rows))
+
+    out_name = "record_decompositions_verified.txt" if verified_file else "record_decompositions_generated.txt"
+    out_path = os.path.join(REPO, "data", out_name)
+    with open(out_path, "w") as f:
+        if verified_file:
+            f.write("# Balance-gap records, deterministically generated by src/gen_records.py and\n")
+            f.write("# cross-checked against data/records_to_1e9_COMPLETE.txt.\n")
+            f.write("# n = x^2+y^2+z^2+w^2, canonical (min x, then y, then z, then w) = A122921/2/3/4.\n")
+            f.write("# g = x - ceil(sqrt(n/4)).  status: exhaustive (n<=1e7) | scan-1e9 (<=1e9).\n")
+        else:
+            f.write("# Balance-gap records, DETERMINISTICALLY GENERATED (no scan) by "
+                    "src/gen_records.py\n")
+            f.write("# n = x^2+y^2+z^2+w^2, canonical = min x, then y, then z, then w\n")
+            f.write("# g = x - ceil(sqrt(n/4)).  status: exhaustive (n<=1e7) | scan-1e9 "
+                    "(<=1e9) | chain-conj (>1e9, conjectured complete)\n")
+        f.write("# idx n x y z w g status\n")
+        for i, (n, x, y, z, w, g, st) in enumerate(rows, 1):
+            f.write(f"{i} {n} {x} {y} {z} {w} g={g} {st}\n")
+    print(f"wrote {out_path} ({len(rows)} rows)")
+    # show the first 40 so the structure is visible at a glance
+    print("\nfirst 40 generated rows:")
+    print(f"{'idx':>4} {'n':>22} {'x':>10} {'y':>10} {'z':>10} {'w':>9} "
+          f"{'g':>10}  status")
+    for i, (n, x, y, z, w, g, st) in enumerate(rows[:40], 1):
+        print(f"{i:>4} {n:>22} {x:>10} {y:>10} {z:>10} {w:>9} {g:>10}  {st}")
+
+
+if __name__ == "__main__":
+    main()
