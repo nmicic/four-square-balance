@@ -3,6 +3,8 @@
 This repository supports one object: the **gap-record locations** for the
 canonical four-square balance gap.
 
+[Open the interactive visualization](https://nmicic.github.io/four-square-balance/viz/index.html).
+
 For each positive integer n, write
 
     n = x^2 + y^2 + z^2 + w^2,   x >= y >= z >= w >= 0.
@@ -74,11 +76,11 @@ Run the PARI/GP record self-test:
 ## Visualization
 
 `viz/index.html` visualizes the canonical four-square shapes, colored by balance
-gap, with the verified gap-record rays highlighted. See `viz/README.md`.
+gap, with the verified gap-record rays highlighted:
 
-When GitHub Pages is enabled, the visualization will be available at:
+[https://nmicic.github.io/four-square-balance/viz/index.html](https://nmicic.github.io/four-square-balance/viz/index.html)
 
-    https://nmicic.github.io/four-square-balance/viz/index.html
+See `viz/README.md`.
 
 ## Archive
 
