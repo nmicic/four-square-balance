@@ -1,125 +1,459 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Four-square minimal decomposition — 4D shape space</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four-square balance — a point in shape space</title>
 <style>
-  body{margin:0;background:#0b0e14;color:#cdd6f4;font:14px system-ui,sans-serif;overflow:hidden}
-  #ui{position:fixed;top:10px;left:10px;background:#11151fcc;padding:12px 14px;border-radius:10px;
-      max-width:340px;line-height:1.4;backdrop-filter:blur(4px)}
-  #ui h1{font-size:15px;margin:0 0 6px}
-  .dim{color:#7f849c;font-size:12px}
-  button{background:#1e2330;color:#cdd6f4;border:1px solid #313646;border-radius:6px;
-         padding:5px 9px;margin:2px 2px 0 0;cursor:pointer;font-size:12px}
-  button.on{background:#3b5bdb;border-color:#3b5bdb;color:#fff}
-  #legend{position:fixed;bottom:10px;left:10px;background:#11151fcc;padding:8px 12px;border-radius:8px;font-size:12px}
-  .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:middle}
-  #warn{color:#f9e2af;font-size:12px;margin-top:6px}
-</style></head><body>
-<div id="ui">
-  <h1>4D shape space — minimal four-square decomposition</h1>
-  <div class="dim">Each n &rarr; (x,y,z,w), x&ge;y&ge;z&ge;w (most-balanced rep), plotted in the
-  sum-zero <b>shape 3-space</b>: s1=(x&minus;y)/&radic;2, s2=(x+y&minus;2z)/&radic;6, s3=(x+y+z&minus;3w)/&radic;12.</div>
-  <div style="margin-top:8px">
-    <button id="m0" class="on">Shell cloud</button>
-    <button id="m1">Cone (vs n)</button>
-    <button id="m2">Multishell</button>
-    <button id="mRays" class="on">Record rays</button>
-    <button id="mAuto">Auto-rotate</button>
-  </div>
-  <div style="margin-top:6px" id="modeInfo"></div>
-  <div id="warn"></div>
-  <div class="dim" style="margin-top:8px">drag = rotate · scroll = zoom · right-drag = pan ·
-    <span id="cnt"></span></div>
-</div>
-<div id="legend"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="fsq4d_fallback.js"></script>
-<script>
-let DATA=null;  // Float32Array, 5 per point: s1,s2,s3,val,flag(=mode*2)
-const scene=new THREE.Scene();
-const cam=new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 8000); cam.position.set(40,30,70);
-const rnd=new THREE.WebGLRenderer({antialias:true}); rnd.setSize(innerWidth,innerHeight);
-rnd.setPixelRatio(devicePixelRatio); document.body.appendChild(rnd.domElement);
-const ctl=new THREE.OrbitControls(cam,rnd.domElement); ctl.enableDamping=true;
-scene.add(new THREE.AxesHelper(20));
-addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rnd.setSize(innerWidth,innerHeight);});
-function turbo(t){t=Math.max(0,Math.min(1,t));
-  return [Math.max(0,Math.min(1,1.5-Math.abs(2*t-1.5)*2)),
-          Math.max(0,Math.min(1,1.5-Math.abs(2*t-1.0)*2)),
-          Math.max(0,Math.min(1,1.5-Math.abs(2*t-0.4)*2))];}
-
-// record-chain rays in shape space (unit dirs). The 96*4^m and 2816*4^m chains
-// coincide in this projection (y=z type); 224*4^m is separate.
-// Coords below are already in plot order (s1, s3-up, s2).
-const RAYS=[
-  {name:"96*4^m & 2816*4^m chains (y=z)", dir:[0.5,0.816,0.289], col:0x4fd6ff},
-  {name:"224*4^m chain (x>y>z)",          dir:[0.316,0.775,0.548], col:0xffb454},
-];
-let rayGroup=null, showRays=true;
-function buildRays(){
-  if(rayGroup){scene.remove(rayGroup);} rayGroup=new THREE.Group();
-  if(showRays){
-    const L = MODE===0?150 : 36;          // match data scale per mode
-    RAYS.forEach(r=>{
-      const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),
-        new THREE.Vector3(r.dir[0]*L,r.dir[1]*L,r.dir[2]*L)]);
-      rayGroup.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:r.col,linewidth:2})));
-    });
+  :root{
+    --bg:#0b0e14; --panel:#11151f; --line:#262c3a; --ink:#cdd6f4; --dim:#7f849c;
+    --accent:#3b5bdb; --good:#40c057; --bad:#fa5252; --pole:#4dabf7; --hot:#ffa94d;
   }
-  scene.add(rayGroup);
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:18px 24px 6px;max-width:1320px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 4px}
+  header p{margin:0;color:var(--dim);font-size:14px;max-width:940px}
+  main{max-width:1320px;margin:0 auto;padding:10px 24px 40px}
+  .stage{display:grid;grid-template-columns:2fr 1fr;gap:16px;height:460px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  #sceneWrap{position:relative;padding:0;overflow:hidden}
+  #scene{width:100%;height:100%;display:block;cursor:grab}
+  #scene.drag{cursor:grabbing}
+  #hint{position:absolute;bottom:10px;left:12px;color:#5b6479;font-size:11.5px;pointer-events:none}
+  #sceneBtns{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+  #sceneBtns button{font-size:11.5px;padding:5px 8px}
+  #sceneBtns select{font-size:11px;padding:4px 6px;background:#1e2330;color:var(--dim);
+    border:1px solid #313646;border-radius:8px;cursor:pointer}
+  #cloudStat{position:absolute;left:12px;bottom:30px;color:#7f88a8;font-size:11px;
+    background:#0e1219cc;border-radius:6px;padding:2px 7px;display:none}
+  #info{display:flex;flex-direction:column;gap:10px;overflow-y:auto;overflow-x:hidden}
+  .big{font-size:28px;font-weight:700;letter-spacing:.5px}
+  .badge{display:inline-block;background:#2b2150;color:#d0bcff;border:1px solid #4c3f82;
+         border-radius:20px;padding:2px 11px;font-size:12px;margin-top:4px}
+  .badge.cube{background:#143222;color:#8ce99a;border-color:#2b6b43}
+  .meterTrack{height:13px;border-radius:8px;
+              background:linear-gradient(90deg,var(--pole),#f2c94c,var(--hot));position:relative;margin-top:6px}
+  .meterPin{position:absolute;top:-4px;width:6px;height:21px;border-radius:3px;background:#fff;
+            box-shadow:0 0 0 2px #0008;transform:translateX(-50%);transition:left .25s}
+  .lab{color:var(--dim);font-size:12.5px}
+  .eq{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .pole{color:var(--pole)} .dimn{color:#7f849c} .hot{color:var(--hot)}
+  hr.mh{border:none;border-top:1px solid #2b3142;margin:8px 0}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px}
+  button{background:#1e2330;color:var(--ink);border:1px solid #313646;border-radius:8px;
+         padding:8px 12px;cursor:pointer;font-size:13.5px}
+  button:hover{border-color:#4658a8}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  input[type=number]{background:#0e1219;color:var(--ink);border:1px solid #313646;border-radius:8px;
+         padding:8px;width:130px;font-size:14px}
+  input[type=range]{flex:1 1 200px;min-width:160px;accent-color:var(--accent)}
+  #numline{margin-top:22px}
+  #nl{width:100%;height:54px;display:block;cursor:pointer}
+  .foot{color:var(--dim);font-size:13px;margin-top:18px;line-height:1.6}
+  .foot a{color:#8aa0ff}
+  #zoomCtl{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:5px}
+  #zoomCtl button{width:36px;height:32px;font-size:19px;font-weight:700;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center}
+  #seedLegend{margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11.5px}
+  #seedLegend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  @media(max-width:900px){ .stage{grid-template-columns:1fr;height:auto} #sceneWrap{height:360px} }
+</style></head>
+<body>
+<header>
+  <h1>Four-square gap records as points</h1>
+  <p>Every whole number is a sum of four squares,
+     <span class="eq">n = x² + y² + z² + w²</span> with
+     <span class="eq">x ≥ y ≥ z ≥ w ≥ 0</span> (Lagrange). Pick the <b>most balanced</b> one — the
+     one whose largest part <span class="eq">x</span> is as small as possible. Strip off the equal-parts
+     diagonal <span class="eq">(1,1,1,1)</span> and what is left is the number's <b>shape</b>: a point
+     in a 3-D <i>shape space</i> where the <span class="pole">origin</span> is perfect balance and points
+     drift outward as the four parts grow uneven.</p>
+  <p style="margin-top:8px;font-size:13px">The headline number is the <b class="hot">gap</b>
+     <span class="eq">= x − ⌈√(n/4)⌉</span>: how far the largest part must exceed the smallest value
+     arithmetic allows. A <b>record</b> is a number whose gap is larger than every earlier gap.
+     The records line up on a handful of <b>family rays</b> from the origin: those are the special numbers
+     whose balanced shape simply <b>doubles</b> when you multiply by 4.</p>
+</header>
+
+<main>
+  <div class="stage">
+    <div class="card" id="sceneWrap">
+      <canvas id="scene"></canvas>
+      <div id="sceneBtns">
+        <button id="bChains" class="on">family rays</button>
+        <button id="bCloud" class="on" title="Plot the most-balanced shape of every number, computed live in the browser. Colour = balance gap.">all numbers</button>
+        <select id="cloudN" title="how many numbers to plot (the cloud covers n ≤ this). Each is solved live for its most balanced four squares.">
+          <option value="2000">cloud n ≤ 2k</option>
+          <option value="20000" selected>cloud n ≤ 20k</option>
+          <option value="100000">cloud n ≤ 100k</option>
+        </select>
+        <button id="bRot">auto-rotate</button>
+        <button id="bReset">reset view</button>
+      </div>
+      <div id="cloudStat"></div>
+      <div id="zoomCtl">
+        <button id="zIn" title="zoom in">+</button>
+        <button id="zOut" title="zoom out">−</button>
+      </div>
+      <div id="hint">drag = rotate · scroll / +− = zoom · ← → = prev/next record</div>
+    </div>
+
+    <div class="card" id="info">
+      <div>
+        <div class="lab">the number</div>
+        <div class="big" id="nval">224</div>
+        <div id="badge"></div>
+      </div>
+      <div>
+        <div class="lab">balance gap — how far the largest part overshoots</div>
+        <div class="eq" id="gapLine" style="font-size:15px;margin-top:2px"></div>
+        <div class="meterTrack"><div class="meterPin" id="pin"></div></div>
+        <div class="lab" id="meterWord" style="margin-top:6px">noticeably uneven</div>
+      </div>
+      <div class="eq" id="math" style="font-size:14px"></div>
+      <div class="lab" id="bracket" style="margin-top:auto"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="prev">◀ prev record</button>
+    <input type="number" id="num" min="1" value="224">
+    <input type="range" id="slider" min="1" max="2048" value="224">
+    <button id="next">next record ▶</button>
+    <button id="x4" class="primary" title="multiply by 4">× 4</button>
+    <button id="rand">random</button>
+  </div>
+
+  <div id="numline" class="card">
+    <div class="lab" style="margin-bottom:4px"><b>Record numbers</b> — where the balanced decomposition
+      sets a new record for the gap <span class="eq">x − ⌈√(n/4)⌉</span>. Click a flag to jump.
+      Flags are coloured by <b>family</b> (its ×4 ray).</div>
+    <canvas id="nl" width="880" height="54"></canvas>
+    <div id="seedLegend"></div>
+  </div>
+
+  <div class="foot">
+    Gap 0 means the largest part reaches the lower bound ⌈√(n/4)⌉; exact equal parts occur only at
+    n = 4m², where x = y = z = w = m.
+    For the <b>record families</b> 96·4ʲ, 224·4ʲ, 2816·4ʲ the balanced decomposition doubles under ×4,
+    so each is an outward ray; the gap doubles with it. Other numbers do <b>not</b> scale this cleanly.
+    &nbsp;·&nbsp;
+    <a href="../sequences/gap-record-locations/">the gap-record-location sequence</a> ·
+    <a href="../README.md">about</a>
+  </div>
+</main>
+
+<script>
+const POLE='#4dabf7', HOT='#ffa94d';
+// ---- the 37 gap-record locations (k, gap), k < 10^9 --------------------------
+const RECORDS=[[1,0],[11,1],[53,2],[96,3],[224,4],[384,6],[896,9],[1536,12],[2816,13],
+[3584,18],[6144,24],[11264,26],[14336,36],[24576,49],[45056,53],[57344,72],[98304,99],
+[180224,107],[229376,144],[393216,198],[720896,215],[917504,289],[1572864,396],
+[2883584,430],[3670016,578],[6291456,793],[11534336,861],[14680064,1156],[25165824,1587],
+[46137344,1723],[58720256,2312],[100663296,3175],[184549376,3447],[234881024,4625],
+[402653184,6350],[738197504,6895],[939524096,9250]];
+const recK=new Set(RECORDS.map(r=>r[0]));
+const DEG=180/Math.PI, AXISDEG=Math.acos(0.5)*DEG;   // 60° = lean of a (k,0,0,0) lattice point
+
+// ---- math: most-balanced four-square decomposition ---------------------------
+function isqrt(v){ if(v<0) return -1; let r=Math.floor(Math.sqrt(v));
+  while(r>0&&r*r>v)r--; while((r+1)*(r+1)<=v)r++; return r; }
+function is3(m){ if(m<0) return false; while(m&&m%4===0) m/=4; return m%8!==7; }   // Legendre: sum of <=3 squares
+function xminOf(n){ let x=isqrt(Math.floor((n+3)/4)); while(4*x*x<n) x++; return x; } // ceil(sqrt(n/4))
+// exact lexicographic-minimum (minimal largest part). Box scan, no factoring.
+function cmin4(n){
+  if(n<=0) return {x:0,y:0,z:0,w:0};
+  const xlo=xminOf(n), xhi=isqrt(n);
+  for(let x=xlo;x<=xhi;x++){
+    const r1=n-x*x; if(!is3(r1)) continue;
+    let ylo=isqrt(Math.floor((r1+2)/3)); while(ylo*ylo*3<r1) ylo++;
+    const yhi=Math.min(x,isqrt(r1));
+    for(let y=ylo;y<=yhi;y++){
+      const m=r1-y*y;
+      let zlo=isqrt(Math.floor((m+1)/2)); while(zlo*zlo*2<m) zlo++;
+      const zhi=Math.min(y,isqrt(m));
+      for(let z=zlo;z<=zhi;z++){
+        const w2=m-z*z, w=isqrt(w2);
+        if(w*w===w2 && w<=z) return {x,y,z,w};
+      }
+    }
+  }
+  return {x:0,y:0,z:0,w:0};   // unreachable (Lagrange)
+}
+function gapOf(n,t){ return t.x - xminOf(n); }
+// Helmert shape coords: the equal-parts direction (1,1,1,1) is killed -> origin = perfect balance.
+const R2=Math.sqrt(2), R6=Math.sqrt(6), R12=Math.sqrt(12);
+function shape(x,y,z,w){ return [(x-y)/R2, (x+y-2*z)/R6, (x+y+z-3*w)/R12]; }
+// lean angle (deg) from the equal-parts direction (1,1,1,1). 0 = exact equal parts.
+function lean(x,y,z,w){ const n=x*x+y*y+z*z+w*w; if(n===0) return 0;
+  let c=(x+y+z+w)/(2*Math.sqrt(n)); c=Math.max(-1,Math.min(1,c)); return Math.acos(c)*DEG; }
+// radius grows with size (log n) so a family ray k,4k,16k,… steps OUTWARD along one direction.
+function radOf(k){ return 0.30 + 0.70*(Math.log10(Math.max(1,k))/9); }
+function dirRad(x,y,z,w,k){ const s=shape(x,y,z,w); const m=Math.hypot(s[0],s[1],s[2])||1, r=radOf(k);
+  return [s[0]/m*r, s[1]/m*r, s[2]/m*r]; }
+// family = the ×4 chain seed (divide by 4 while the quotient is still a record).
+function seedOf(k){ k=Math.round(k); while(k%4===0 && recK.has(k/4)) k/=4; return k; }
+
+// precompute each record's plotted position + gap + lean
+const RECDOTS=RECORDS.map(([k,g])=>{ const t=cmin4(k);
+  return {k, g, x:t.x,y:t.y,z:t.z,w:t.w, pos:dirRad(t.x,t.y,t.z,t.w,k), lean:lean(t.x,t.y,t.z,t.w)}; });
+const CHAINS={};
+RECDOTS.forEach(d=>{ const s=seedOf(d.k); (CHAINS[s]=CHAINS[s]||[]).push(d); });
+Object.values(CHAINS).forEach(arr=>arr.sort((a,b)=>a.k-b.k));
+// families: each its own hue (dot, ray, and number-line flag match)
+const SEED_PALETTE=['#ff6b6b','#f783ac','#da77f2','#9775fa','#5c7cfa','#22b8cf','#63e6be','#ffd43b'];
+const SEEDS=Object.keys(CHAINS).map(Number).sort((a,b)=>a-b);
+const SEED_COLORS={}; SEEDS.forEach((s,i)=>SEED_COLORS[s]=SEED_PALETTE[i%SEED_PALETTE.length]);
+function seedColor(k){ return SEED_COLORS[seedOf(k)] || null; }
+
+// ---- live "all numbers" cloud: solve each n's balanced shape, colour by gap ---
+let CLOUD_MAX=20000;
+const NB=10, GMAX=8;                 // gap colour bins (0 = low-gap blue → GMAX+ = hot)
+const BIN_COLORS=(()=>{ const o=[]; for(let i=0;i<NB;i++) o.push(gapColor(GMAX*i/(NB-1))); return o; })();
+const now=()=> (typeof performance!=='undefined'&&performance.now)?performance.now():0;
+let cloud=null, cloudBuilding=false, cloudMs=0;
+function ensureCloud(onProg){
+  if(cloud && cloud.cap===CLOUD_MAX && cloud.ready){ if(onProg) onProg(CLOUD_MAX,CLOUD_MAX); return; }
+  if(cloudBuilding && cloud && cloud.cap===CLOUD_MAX) return;
+  const cap=CLOUD_MAX;
+  cloud={cap, X:new Float32Array(cap),Y:new Float32Array(cap),Z:new Float32Array(cap),
+         B:new Uint8Array(cap), binStart:null, count:0, ready:false};
+  cloudBuilding=true; const t0=now();
+  let pn=1, pk=0;
+  function finalize(cnt){
+    const X=cloud.X,Y=cloud.Y,Z=cloud.Z,B=cloud.B;
+    const ct=new Int32Array(NB); for(let i=0;i<cnt;i++) ct[B[i]]++;
+    const st=new Int32Array(NB+1); for(let b=0;b<NB;b++) st[b+1]=st[b]+ct[b];
+    const X2=new Float32Array(cnt),Y2=new Float32Array(cnt),Z2=new Float32Array(cnt), cur=st.slice(0,NB);
+    for(let i=0;i<cnt;i++){ const b=B[i], j=cur[b]++; X2[j]=X[i];Y2[j]=Y[i];Z2[j]=Z[i]; }
+    cloud.X=X2; cloud.Y=Y2; cloud.Z=Z2; cloud.binStart=st; cloud.count=cnt;
+    cloud.ready=true; cloudBuilding=false; cloudMs=Math.round(now()-t0); needsDraw=true;
+    if(onProg) onProg(cap,cap);
+  }
+  function step(){
+    const stop=now()+10;
+    for(; pn<=cap; pn++){
+      const t=cmin4(pn); const p=dirRad(t.x,t.y,t.z,t.w,pn);
+      cloud.X[pk]=p[0]; cloud.Y[pk]=p[1]; cloud.Z[pk]=p[2];
+      let b=Math.round(gapOf(pn,t)/GMAX*(NB-1)); cloud.B[pk]=b<0?0:b>NB-1?NB-1:b; pk++;
+      if((pn&1023)===0 && now()>stop){ pn++; if(onProg) onProg(pn,cap); requestAnimationFrame(step); return; }
+    }
+    finalize(pk);
+  }
+  step();
 }
 
-let cloud=null, MODE=0, auto=false;
-function build(){
-  if(cloud){scene.remove(cloud);cloud.geometry.dispose();cloud.material.dispose();}
-  const N=DATA.length/5, pos=[],col=[]; let vmin=1e9,vmax=-1e9,kept=0;
-  for(let i=0;i<N;i++){ const f=DATA[i*5+4], mode=Math.floor(f/2); if(mode!==MODE)continue;
-    const v=DATA[i*5+3]; if(v<vmin)vmin=v; if(v>vmax)vmax=v; }
-  for(let i=0;i<N;i++){ const f=DATA[i*5+4], mode=Math.floor(f/2); if(mode!==MODE)continue;
-    pos.push(DATA[i*5],DATA[i*5+2],DATA[i*5+1]);   // s1, s3 up, s2
-    const c=turbo((DATA[i*5+3]-vmin)/(vmax-vmin+1e-9)); col.push(c[0],c[1],c[2]);
-    kept++;}
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
-  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
-  cloud=new THREE.Points(g,new THREE.PointsMaterial({size:MODE===0?0.5:0.7,vertexColors:true,sizeAttenuation:true}));
-  scene.add(cloud);
-  document.getElementById('cnt').textContent=kept.toLocaleString()+" pts";
-  const info=["<b>Shell cloud</b> — min-points in one shell densely tile the balanced corner "+
-              "(4D nearest-neighbour&asymp;1, locally Z&#8308;). Colour=balance gap.",
-              "<b>Cone</b> — normalized shape directions for n across octaves 2&#178;&#185;..2&#179;&#8304;; they "+
-              "concentrate on the s3=(x+y+z&minus;3w) axis and the cone <b>narrows with n</b> "+
-              "&rarr; minimal rep &rarr; (m,m,m,m&#39;). Colour=bits of n.",
-              "<b>Multishell</b> — clouds at several n, each normalized by &radic;n, overlaid. "+
-              "Colour=shell index (small&rarr;large n). The same shape persists across scales."][MODE];
-  document.getElementById('modeInfo').innerHTML=info;
-  const leg=["gap low <span class='sw' style='background:#3030ff'></span>&rarr;<span class='sw' style='background:#ff3030'></span> high",
-             "bits 21 <span class='sw' style='background:#3030ff'></span>&rarr;<span class='sw' style='background:#ff3030'></span> 30",
-             "small n <span class='sw' style='background:#3030ff'></span>&rarr;<span class='sw' style='background:#ff3030'></span> large n"][MODE];
-  const rayleg = showRays ? " &nbsp;·&nbsp; rays: <span class='sw' style='background:#4fd6ff'></span>96/2816 chains <span class='sw' style='background:#ffb454'></span>224 chain" : "";
-  document.getElementById('legend').innerHTML=leg+rayleg;
-  buildRays();
+// ---- info panel --------------------------------------------------------------
+function mathHTML(n,t){
+  const L=v=>v.toLocaleString(), {x,y,z,w}=t, g=gapOf(n,t), th=lean(x,y,z,w);
+  return (
+    `${L(n)} = <span class="hot">${L(x)}²</span> + ${L(y)}² + ${L(z)}² + ${L(w)}²<br>`+
+    `most balanced four squares <span class="eq">(${L(x)},${L(y)},${L(z)},${L(w)})</span><br>`+
+    `largest part <b>${L(x)}</b>, lower bound ⌈√(n/4)⌉ = <b>${L(xminOf(n))}</b> &rarr; gap <b class="hot">${L(g)}</b><br>`+
+    `shape lean: <b>${th.toFixed(1)}°</b> <span class="dimn">(0° = equal parts, ${AXISDEG.toFixed(0)}° = one big part)</span>`);
 }
-function setMode(m){MODE=m;['m0','m1','m2'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===m));build();}
-document.getElementById('m0').onclick=()=>setMode(0);
-document.getElementById('m1').onclick=()=>setMode(1);
-document.getElementById('m2').onclick=()=>setMode(2);
-document.getElementById('mRays').onclick=function(){showRays=!showRays;this.classList.toggle('on',showRays);build();};
-document.getElementById('mAuto').onclick=function(){auto=!auto;this.classList.toggle('on',auto);};
-(function loop(){requestAnimationFrame(loop);
-  if(auto){ if(cloud)cloud.rotation.y+=0.003; if(rayGroup)rayGroup.rotation.y+=0.003; }
-  ctl.update(); rnd.render(scene,cam);})();
 
-// load the big binary; fall back to the embedded sample (file:// without a server)
-fetch('fsq4d_data.bin').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer();})
-  .then(buf=>{DATA=new Float32Array(buf); build();})
-  .catch(()=>{
-    const fb=window.FSQ4D_FALLBACK||[]; DATA=new Float32Array(fb.length*5);
-    fb.forEach((r,i)=>r.forEach((v,j)=>DATA[i*5+j]=v));
-    document.getElementById('warn').innerHTML=
-      "Loaded small embedded sample. For the full dataset, run "+
-      "<code>python3 -m http.server</code> in <code>viz/</code> and open "+
-      "<code>http://localhost:8000/</code>.";
-    build();
-  });
-</script></body></html>
+// ---- state -------------------------------------------------------------------
+let N=224;
+let curP=[0,0,0], tgtP=RECDOTS.find(d=>d.k===224).pos.slice(), tw=1;
+let showChains=true, autoRot=false, showCloud=true;
+let needsDraw=true;
+
+function setN(n){
+  n=Math.max(1,Math.round(n)); N=n;
+  const t=cmin4(n);
+  document.getElementById('nval').textContent=n.toLocaleString();
+  document.getElementById('num').value=n;
+  const sl=document.getElementById('slider'); if(n<=+sl.max) sl.value=n;
+  updatePanel(n,t);
+  tgtP=dirRad(t.x,t.y,t.z,t.w,n); tw=0;
+  drawNumberline(); needsDraw=true;
+}
+function updatePanel(n,t){
+  const badge=document.getElementById('badge'), word=document.getElementById('meterWord');
+  const pin=document.getElementById('pin'), math=document.getElementById('math');
+  const brk=document.getElementById('bracket'), gapLine=document.getElementById('gapLine');
+  const g=gapOf(n,t), th=lean(t.x,t.y,t.z,t.w);
+  let b='';
+  if(recK.has(n)){ const idx=RECORDS.findIndex(r=>r[0]===n)+1;
+    b=`<span class="badge">★ record #${idx} — sets a new record for the balance gap</span>`; }
+  else if(t.x===t.y&&t.y===t.z&&t.z===t.w){ b=`<span class="badge cube">★ exact equal parts — x=y=z=w=${t.x}</span>`; }
+  badge.innerHTML=b;
+  gapLine.innerHTML=`gap <b class="hot">${g.toLocaleString()}</b> &nbsp;<span class="dimn">· lean ${th.toFixed(1)}°</span>`;
+  pin.style.left=(Math.min(1,th/AXISDEG)*100).toFixed(1)+'%';
+  word.textContent = th<3?'near equal parts' : th<22?'gently uneven'
+                   : th<38?'noticeably uneven' : th<52?'strongly uneven' : 'one part dominates';
+  math.innerHTML = mathHTML(n,t);
+  brk.innerHTML = bracketText(n);
+}
+function bracketText(n){
+  if(recK.has(n)){ const i=RECORDS.findIndex(r=>r[0]===n)+1; return `this <b>is</b> record #${i}.`; }
+  if(n>RECORDS[RECORDS.length-1][0]) return `beyond the last known record (939,524,096).`;
+  let lo=null,hi=null;
+  for(let i=0;i<RECORDS.length;i++){ if(RECORDS[i][0]<n) lo=i; else { hi=i; break; } }
+  if(lo===null) return `below the first record (1).`;
+  return `lies between record #${lo+1} (${RECORDS[lo][0].toLocaleString()}, gap ${RECORDS[lo][1]}) `+
+         `and record #${hi+1} (${RECORDS[hi][0].toLocaleString()}, gap ${RECORDS[hi][1]}).`;
+}
+
+// ---- 3-D shape space (hand-rolled projection + trackball) --------------------
+const cv=document.getElementById('scene'), g=cv.getContext('2d');
+let yaw=0.7, pitch=0.36, zoom=1.7, autoYaw=0;
+const ZMIN=0.6, ZMAX=10;
+const TARGET=[0,0,0.34];                        // look near the equal-parts origin / cloud middle
+function fit(){ const r=cv.getBoundingClientRect(), dpr=devicePixelRatio||1;
+  cv.width=r.width*dpr; cv.height=r.height*dpr; g.setTransform(dpr,0,0,dpr,0,0); }
+function project(p){
+  const X=p[0]-TARGET[0], Y=p[1]-TARGET[1], Z=p[2]-TARGET[2];
+  const cy=Math.cos(yaw+autoYaw), sy=Math.sin(yaw+autoYaw);
+  let x1=X*cy - Z*sy, z1=X*sy + Z*cy, y1=Y;
+  const cp=Math.cos(pitch), sp=Math.sin(pitch);
+  let y2=y1*cp - z1*sp, z2=y1*sp + z1*cp;
+  const W=cv.clientWidth,H=cv.clientHeight, R=Math.min(W,H)*0.42*zoom;
+  return {x:W/2 + x1*R, y:H/2 - y2*R, d:z2};
+}
+function line(a,b,col,w,dash){ const A=project(a),B=project(b);
+  g.strokeStyle=col; g.lineWidth=w||1; g.setLineDash(dash||[]);
+  g.beginPath(); g.moveTo(A.x,A.y); g.lineTo(B.x,B.y); g.stroke(); g.setLineDash([]); }
+function dot(p,r,col){ const q=project(p); g.fillStyle=col;
+  g.beginPath(); g.arc(q.x,q.y,r,0,7); g.fill(); return q; }
+function txt(p,s,col,dx,dy){ const q=project(p); g.fillStyle=col;
+  g.font='12px ui-monospace,Menlo,monospace'; g.textAlign='left'; g.textBaseline='middle';
+  g.fillText(s,q.x+(dx||0),q.y+(dy||0)); }
+// ramp blue(low gap) -> amber(high gap), by gap/GMAX
+function gapColor(gv){ const t=Math.min(1,gv/GMAX);
+  const a=[0x4d,0xab,0xf7], b=[0xff,0xa9,0x4d];
+  const c=a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+function draw3D(){
+  const W=cv.clientWidth,H=cv.clientHeight; g.clearRect(0,0,W,H);
+  // faint reference rings around the equal-parts origin (shape-space guides)
+  g.lineWidth=1;
+  for(const rr of [0.5,0.8]){ g.strokeStyle='#1b2230'; g.beginPath();
+    for(let i=0;i<=64;i++){ const t=i/64*2*Math.PI, p=project([rr*Math.cos(t),0,rr*Math.sin(t)]);
+      i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y); } g.stroke(); }
+  // family rays: connector from the equal-parts origin through each chain's dots, tinted by family
+  if(showChains){ Object.values(CHAINS).forEach(arr=>{ if(arr.length<2) return;
+    g.strokeStyle=seedColor(arr[0].k)||'#39435c'; g.globalAlpha=0.45; g.lineWidth=1.3; g.setLineDash([]);
+    g.beginPath(); const a=project([0,0,0]); g.moveTo(a.x,a.y);
+    arr.forEach(d=>{ const q=project(d.pos); g.lineTo(q.x,q.y); }); g.stroke(); g.globalAlpha=1;
+  }); }
+  // live "all numbers" cloud — every n's balanced shape, coloured by gap
+  if(showCloud && cloud && cloud.ready && cloud.count){
+    const R=Math.min(W,H)*0.42*zoom, W2=W/2, H2=H/2;
+    const cyy=Math.cos(yaw+autoYaw), syy=Math.sin(yaw+autoYaw), cpp=Math.cos(pitch), spp=Math.sin(pitch);
+    const t0=TARGET[0],t1=TARGET[1],t2=TARGET[2], X=cloud.X,Y=cloud.Y,Z=cloud.Z, st=cloud.binStart;
+    const s=cloud.count>60000?1.1:1.5, h=s/2;
+    g.globalAlpha=cloud.count>60000?0.26:0.34;
+    for(let b=0;b<NB;b++){ g.fillStyle=BIN_COLORS[b];
+      for(let i=st[b];i<st[b+1];i++){
+        const Xx=X[i]-t0, Zz=Z[i]-t2, x1=Xx*cyy - Zz*syy, z1=Xx*syy + Zz*cyy, y2=(Y[i]-t1)*cpp - z1*spp;
+        g.fillRect(W2 + x1*R - h, H2 - y2*R - h, s, s);
+      } }
+    g.globalAlpha=1;
+  }
+  // the equal-parts origin (1,1,1,1) — perfect balance (drawn over the cloud so it reads)
+  const o=dot([0,0,0],5,POLE); g.strokeStyle=POLE; g.globalAlpha=0.6; g.lineWidth=1.2;
+  g.beginPath(); g.arc(o.x,o.y,9,0,7); g.stroke(); g.globalAlpha=1;
+  txt([0,0,0],'equal parts',POLE,11,-2);
+  // record dots (painter-sorted), coloured by family
+  let items=RECDOTS.map(d=>({pos:d.pos,k:d.k}));
+  const cp=[curP[0]+(tgtP[0]-curP[0])*tw, curP[1]+(tgtP[1]-curP[1])*tw, curP[2]+(tgtP[2]-curP[2])*tw];
+  items.sort((a,b)=>project(a.pos).d-project(b.pos).d);
+  items.forEach(it=>{ if(it.k===N) return; dot(it.pos, 3.4, seedColor(it.k)||HOT); });
+  // current number: vector from the equal-parts origin + ring + label
+  line([0,0,0],cp,'#ffffff',1.5);
+  const q=dot(cp,5.5,'#fff'); g.strokeStyle='#fff'; g.lineWidth=1.5;
+  g.beginPath(); g.arc(q.x,q.y,9,0,7); g.stroke();
+  txt(cp, N.toLocaleString(), '#fff', 12, -2);
+}
+function frame(){
+  if(autoRot){ autoYaw+=0.004; needsDraw=true; }
+  if(tw<1){ tw=Math.min(1,tw+0.06); if(tw>=1) curP=tgtP.slice(); needsDraw=true; }
+  if(cloudBuilding) needsDraw=true;
+  if(needsDraw){ draw3D(); needsDraw=false; }
+  requestAnimationFrame(frame);
+}
+
+// ---- trackball + zoom --------------------------------------------------------
+let dragging=false, px=0, py=0;
+cv.addEventListener('mousedown',e=>{ dragging=true; px=e.clientX; py=e.clientY; cv.classList.add('drag'); });
+addEventListener('mouseup',()=>{ dragging=false; cv.classList.remove('drag'); });
+addEventListener('mousemove',e=>{ if(!dragging)return;
+  yaw+=(e.clientX-px)*0.01; pitch+=(e.clientY-py)*0.01;
+  pitch=Math.max(-1.4,Math.min(1.4,pitch)); px=e.clientX; py=e.clientY; needsDraw=true; });
+cv.addEventListener('wheel',e=>{ e.preventDefault();
+  zoom*=Math.exp(-e.deltaY*0.0012); zoom=Math.max(ZMIN,Math.min(ZMAX,zoom)); needsDraw=true; },{passive:false});
+function setZoom(z){ zoom=Math.max(ZMIN,Math.min(ZMAX,z)); needsDraw=true; }
+document.getElementById('zIn').onclick=()=>setZoom(zoom*1.3);
+document.getElementById('zOut').onclick=()=>setZoom(zoom/1.3);
+
+// ---- number line -------------------------------------------------------------
+const nlc=document.getElementById('nl'), gn=nlc.getContext('2d');
+function xlog(k){ const W=nlc.width-24; return 12 + W*(Math.log10(Math.max(1,k))/9); }
+function drawNumberline(){
+  const W=nlc.width,H=nlc.height; gn.clearRect(0,0,W,H);
+  gn.strokeStyle='#2c3344'; gn.lineWidth=2; gn.beginPath(); gn.moveTo(12,H-16); gn.lineTo(W-12,H-16); gn.stroke();
+  gn.fillStyle='#5b6479'; gn.font='10px system-ui';
+  for(let d=0;d<=9;d++){ const x=xlog(Math.pow(10,d)); gn.fillRect(x,H-20,1,8); gn.fillText('10^'+d,x-8,H-4); }
+  RECORDS.forEach(([k])=>{ const x=xlog(k); const col=seedColor(k)||'#3b5bdb';
+    gn.strokeStyle=col; gn.globalAlpha=0.85; gn.beginPath(); gn.moveTo(x,H-16); gn.lineTo(x,12); gn.stroke();
+    gn.globalAlpha=1; gn.fillStyle=col; gn.beginPath(); gn.arc(x,12,3,0,7); gn.fill(); });
+  const x=xlog(Math.max(1,N));
+  gn.strokeStyle='#fff'; gn.lineWidth=2; gn.beginPath(); gn.moveTo(x,H-16); gn.lineTo(x,8); gn.stroke();
+  gn.fillStyle='#fff'; gn.beginPath(); gn.moveTo(x,6); gn.lineTo(x-4,0); gn.lineTo(x+4,0); gn.closePath(); gn.fill();
+}
+nlc.addEventListener('click',e=>{
+  const r=nlc.getBoundingClientRect(), mx=(e.clientX-r.left)*nlc.width/r.width;
+  let best=null,bd=1e9; RECORDS.forEach(([k])=>{ const d=Math.abs(xlog(k)-mx); if(d<bd){bd=d;best=k;} });
+  if(best!=null && bd<14) setN(best);
+});
+
+// ---- controls ----------------------------------------------------------------
+document.getElementById('num').addEventListener('input',e=>setN(+e.target.value||1));
+document.getElementById('slider').addEventListener('input',e=>setN(+e.target.value));
+document.getElementById('x4').addEventListener('click',()=>setN(N*4));
+document.getElementById('rand').addEventListener('click',()=>setN(Math.floor(Math.random()*2000)+1));
+document.getElementById('prev').addEventListener('click',()=>{
+  let p=null; RECORDS.forEach(([k])=>{ if(k<N) p=k; }); if(p!=null) setN(p);
+});
+document.getElementById('next').addEventListener('click',()=>{
+  const nx=RECORDS.find(([k])=>k>N); if(nx) setN(nx[0]);
+});
+document.getElementById('bChains').onclick=function(){ showChains=!showChains; this.classList.toggle('on',showChains); needsDraw=true; };
+const cloudStat=document.getElementById('cloudStat');
+function cloudProg(done,total){
+  if(!showCloud){ cloudStat.style.display='none'; return; }
+  cloudStat.style.display='block';
+  cloudStat.textContent = (done>=total && cloud && cloud.ready)
+    ? `${cloud.count.toLocaleString()} points (n ≤ ${total.toLocaleString()}) · solved in ${cloudMs} ms`
+    : `building cloud… ${Math.round(done/total*100)}%`;
+}
+function refreshCloud(){ if(showCloud){ ensureCloud(cloudProg); } else cloudStat.style.display='none'; needsDraw=true; }
+document.getElementById('bCloud').onclick=function(){ showCloud=!showCloud; this.classList.toggle('on',showCloud); refreshCloud(); };
+document.getElementById('cloudN').addEventListener('change',e=>{ CLOUD_MAX=+e.target.value; cloud=null; refreshCloud(); });
+document.getElementById('bRot').onclick=function(){ autoRot=!autoRot; this.classList.toggle('on',autoRot); needsDraw=true; };
+document.getElementById('bReset').onclick=()=>{ yaw=0.7; pitch=0.36; zoom=1.7; autoYaw=0; needsDraw=true; };
+(function buildLegend(){ const el=document.getElementById('seedLegend');
+  let h='<span class="dimn">families:</span>';
+  SEEDS.forEach(s=>{ const g=RECORDS.find(r=>r[0]===s)[1];
+    h+=`<span><span class="sw" style="background:${SEED_COLORS[s]}"></span>`+
+    `${s.toLocaleString()} <span class="dimn">· gap ${g}</span></span>`; });
+  el.innerHTML=h; })();
+document.addEventListener('keydown',e=>{ if(e.key==='ArrowRight')document.getElementById('next').click();
+  else if(e.key==='ArrowLeft')document.getElementById('prev').click(); });
+
+// ---- self-check (console) ----------------------------------------------------
+(function(){ let ok=true,bad=null;
+  for(const [k,gp] of RECORDS){ const t=cmin4(k); const g=gapOf(k,t);
+    if(t.x*t.x+t.y*t.y+t.z*t.z+t.w*t.w!==k || g!==gp){ ok=false;bad=[k,gp,t,g];break; } }
+  console.log('gap self-check vs all 37 records:', ok?'PASS':('FAIL '+JSON.stringify(bad))); })();
+
+addEventListener('resize',()=>{ fit(); needsDraw=true; });
+document.getElementById('cloudN').value=String(CLOUD_MAX);
+fit(); setN(224); refreshCloud();
+requestAnimationFrame(frame);
+</script>
+</body></html>

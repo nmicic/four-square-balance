@@ -38,6 +38,9 @@ four nonnegative squares: two observed chains overlap A006431, but 53 and the
   locations and their gap values for k < 10^9.
 - `data/record_decompositions_verified.txt` — canonical decompositions for those
   37 verified records.
+- `data/gap_table_1_20000.csv` — dense per-n companion table showing the
+  canonical decomposition, gap, running gap record, and contextual spread for
+  n = 1..20000.
 
 The observed structure is:
 
@@ -58,6 +61,8 @@ completeness statement.
   the observed three-chain construction.
 - `src/gen_records.py` — deterministic generator for the observed chain table; it
   marks rows as `exhaustive`, `scan-1e9`, or `chain-conj`.
+- `src/gap_table.py` — generator for the dense per-n companion CSV
+  `data/gap_table_1_20000.csv`.
 
 Build and run the C checks:
 
@@ -75,8 +80,9 @@ Run the PARI/GP record self-test:
 
 ## Visualization
 
-`viz/index.html` visualizes the canonical four-square shapes, colored by balance
-gap, with the verified gap-record rays highlighted:
+`viz/index.html` visualizes the canonical four-square shapes in Helmert
+shape-space, colored by balance gap, with the verified gap-record rays
+highlighted:
 
 [https://nmicic.github.io/four-square-balance/viz/index.html](https://nmicic.github.io/four-square-balance/viz/index.html)
 
