@@ -63,7 +63,7 @@ The most balanced four squares do **not** scale cleanly under ×4 for most n: e.
 `4 = 1^2+1^2+1^2+1^2` is more balanced than `(2,0,0,0)`. Clean doubling survives
 only along the verified **record families** `96*4^m`, `224*4^m`, `2816*4^m`.
 That is why the records form straight rays in shape space while the surrounding
-cloud does not. The reason is a mod-4 parity count — see `../NOTES.md`.
+cloud does not.
 
 ## Files
 
