@@ -1,7 +1,7 @@
 # four-square-balance
 
 This repository supports one object: the **gap-record locations** for the
-canonical four-square balance gap.
+canonical four-square balance gap, published as OEIS [A396760](https://oeis.org/A396760).
 
 [Open the interactive visualization](https://nmicic.github.io/four-square-balance/viz/index.html).
 
