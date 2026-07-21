@@ -93,6 +93,9 @@ See `viz/README.md`.
 `archive/` contains exploratory companion sequences and code that are not part of
 the gap-record-location submission. They are kept for reproducibility context, but
 the active repository surface is intentionally focused on the single sequence above.
+This includes the p = 3..7 analogues of A396760 for sums of four p-th powers
+(`archive/exploratory-sequences/power-balance-p3/` … `power-balance-p7/`, visualized
+in `viz/power-balance/`); they are documented for reference, not submitted to the OEIS.
 
 ## License
 

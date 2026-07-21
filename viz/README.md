@@ -80,5 +80,13 @@ The `fsq4d*` files all support `fsq4d.html`:
 - `gen_data.py` — regenerates `fsq4d_data.bin` and `fsq4d_meta.json` from a packed
   canonical-decomposition table, if one is available locally.
 
+## Power-balance family (`power-balance/`)
+
+`power-balance/` holds a second, exploratory pair of viewers that generalize the
+balance-gap construction from squares to sums of four p-th powers, p = 2..7
+(three.js from a CDN, so they need internet access). The p >= 3 record data is
+archived in `../archive/exploratory-sequences/power-balance-p3/` …
+`power-balance-p7/`; see `power-balance/README.md`.
+
 The visualization is supporting material for the gap-record-location sequence; it
 is not a separate sequence submission.
