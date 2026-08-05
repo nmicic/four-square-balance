@@ -88,7 +88,7 @@
           <option value="20000" selected>cloud n ≤ 20k</option>
           <option value="100000">cloud n ≤ 100k</option>
         </select>
-        <button id="bRot">auto-rotate</button>
+        <button id="bRot" class="on">auto-rotate</button>
         <button id="bReset">reset view</button>
       </div>
       <div id="cloudStat"></div>
@@ -264,7 +264,7 @@ function mathHTML(n,t){
 // ---- state -------------------------------------------------------------------
 let N=224;
 let curP=[0,0,0], tgtP=RECDOTS.find(d=>d.k===224).pos.slice(), tw=1;
-let showChains=true, autoRot=false, showCloud=true;
+let showChains=true, autoRot=true, showCloud=true;
 let needsDraw=true;
 
 function setN(n){

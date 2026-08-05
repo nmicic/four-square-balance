@@ -36,6 +36,7 @@
   .rowbtn{display:flex;gap:5px;margin-top:7px}
   .tg{flex:1;text-align:center;font-family:inherit;font-size:8.5px;letter-spacing:.2px;text-transform:uppercase;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:7px;padding:7px 3px;cursor:pointer;text-decoration:none;display:block}
   a.tg{color:var(--cool);border-color:#2b4a5a}
+  .tg[aria-pressed=true]{color:var(--bg);background:var(--cool);border-color:var(--cool)}
   .keyrow{margin-top:9px;font-size:8.5px;color:var(--dim);line-height:1.7}
   .keyrow i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
   .famwrap{position:absolute;left:0;right:0;bottom:0;height:118px;z-index:10;background:rgba(7,10,16,.93);border-top:1px solid var(--line)}
@@ -68,6 +69,7 @@
   </div>
   <div class="seqbox" id="seqbox"></div>
   <div class="rowbtn">
+    <button class="tg" id="walkBtn" aria-pressed="true">Auto-walk</button>
     <button class="tg" id="copy">Copy records</button>
   </div>
   <div class="keyrow">
@@ -253,6 +255,7 @@ function drawFam(){
   for(const e of [1,100,1e4,1e6,3e7]){fx.fillText(e>=1e6?(e/1e6)+'M':e>=1e4?(e/1000)+'k':e,xN(e)-6,12);}
 }
 fam.addEventListener('pointerdown',e=>{
+  setWalk(false);
   const r=fam.getBoundingClientRect(),W=fam.clientWidth,H=118;
   const X0=64,X1=W-14,Y0=18,rh=(H-Y0-8)/PLIST.length;
   const px=e.clientX-r.left,py=e.clientY-r.top;
@@ -265,6 +268,29 @@ fam.addEventListener('pointerdown',e=>{
     document.getElementById('seqbox').innerHTML='<b>records</b> → '+D.recs.map(x=>x[0]).join(', ');}
   setShell(best);
 });
+
+// ---------- auto-walk: tour of the family ----------
+// One record step per second, 10 steps per exponent, then the next exponent
+// takes over. Only exponents with at least 10 records are toured — p=2 (11)
+// and p=3 (25); p≥4 rows are record-poor and barely change. Each toured p
+// keeps its own cursor and resumes where it stopped on its next turn, always
+// forward, wrapping past the last record back to record 1. Stepping is driven
+// by the render loop, not a timer, so if the view rotates the walk is running.
+// Any manual navigation switches the walk off.
+const WALKP=PLIST.filter(p=>buildP(p).recs.length>=10);
+let walkOn=false,walkRow=0,walkN=0,walkLast=0;
+const walkPos=WALKP.map(()=>({i:-1})); // per-p cursor into recs
+function walkStep(){
+  const p=WALKP[walkRow],D=buildP(p),c=walkPos[walkRow];
+  if(S.p!==p)setP(p);
+  c.i=(c.i+1)%D.recs.length;
+  setShell(D.recs[c.i][0]);
+  if(++walkN>=10){walkN=0;walkRow=(walkRow+1)%WALKP.length;}
+}
+function setWalk(on){walkOn=on;
+  document.getElementById('walkBtn').setAttribute('aria-pressed',on);
+  if(on){walkRow=0;walkN=0;walkPos.forEach(c=>{c.i=-1;});
+    walkLast=performance.now();walkStep();}}
 
 // ---------- camera & boot ----------
 let rad=8.6,theta=0.9,phi=1.0;const O=new THREE.Vector3();
@@ -279,11 +305,12 @@ el.addEventListener('touchend',()=>{drag=false;pinch=0;});
 
 const pb=document.getElementById('pbtns');
 for(const p of PLIST){const b=document.createElement('button');b.className='pb';b.dataset.p=p;b.textContent=p;
-  if(p===2)b.setAttribute('aria-pressed','true');b.addEventListener('click',()=>setP(p));pb.appendChild(b);}
-document.getElementById('pSh').addEventListener('click',()=>stepShell(-1));
-document.getElementById('nSh').addEventListener('click',()=>stepShell(1));
-document.getElementById('pRec').addEventListener('click',()=>stepRec(-1));
-document.getElementById('nRec').addEventListener('click',()=>stepRec(1));
+  if(p===2)b.setAttribute('aria-pressed','true');b.addEventListener('click',()=>{setWalk(false);setP(p);});pb.appendChild(b);}
+document.getElementById('pSh').addEventListener('click',()=>{setWalk(false);stepShell(-1);});
+document.getElementById('nSh').addEventListener('click',()=>{setWalk(false);stepShell(1);});
+document.getElementById('pRec').addEventListener('click',()=>{setWalk(false);stepRec(-1);});
+document.getElementById('nRec').addEventListener('click',()=>{setWalk(false);stepRec(1);});
+document.getElementById('walkBtn').addEventListener('click',()=>setWalk(!walkOn));
 document.getElementById('copy').addEventListener('click',()=>{
   const D=buildP(S.p),txt=D.recs.map(r=>r[0]).join(', ');
   const done=()=>{const b=document.getElementById('copy');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy records',1200);};
@@ -297,10 +324,12 @@ for(const p of PLIST)buildP(p);
   const got=DB[2].recs.map(r=>r[0]);
   console.log('records self-check:',JSON.stringify(got)===JSON.stringify(want)?'PASS':'FAIL '+got);})();
 setP(2);
+setWalk(true);
 function resize(){renderer.setSize(innerWidth,innerHeight-118);drawFam();}
 addEventListener('resize',resize);resize();
-(function loop(){requestAnimationFrame(loop);
+(function loop(ts){requestAnimationFrame(loop);
   if(!drag)theta+=0.0022;
+  if(walkOn&&ts-walkLast>=1000){walkLast=ts;walkStep();}
   const hw=innerWidth/2,hh=(innerHeight-118)/2;camera.aspect=hw/hh;camera.updateProjectionMatrix();camPos();
   const lay=[[0,hh],[hw,hh],[0,0],[hw,0]];
   for(let i=0;i<4;i++){const[x,y]=lay[i];renderer.setViewport(x,y,hw,hh);renderer.setScissor(x,y,hw,hh);renderer.render(panels[i].sc,camera);}
