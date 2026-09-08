@@ -1,6 +1,6 @@
 # four-square-balance
 
-This repository supports one object: the **gap-record locations** for the
+This repository documents the **gap-record locations** for the
 canonical four-square balance gap, published as OEIS [A396760](https://oeis.org/A396760).
 
 [Open the interactive visualization](https://nmicic.github.io/four-square-balance/viz/index.html).
@@ -88,14 +88,46 @@ highlighted:
 
 See `viz/README.md`.
 
+## Related Power-Balance Sequences
+
+A396760 is the p = 2 member of a family using sums of four p-th powers.
+The p = 3..7 members are exploratory and are not in the OEIS. Each has its
+own terms, scan bound, and program.
+
+For each exponent p, take the least possible largest root d over all
+representations `n = a^p+b^p+c^p+d^p` with nonnegative integer roots. The gap
+is d minus the least integer m with `4*m^p >= n`. The sequence lists the n
+where this gap exceeds every earlier gap. For p >= 3, only representable
+positive integers are considered.
+
+| Exponent | Sequence | Scan bound | Records in that range |
+| ---: | --- | ---: | ---: |
+| 2 | [Four squares: A396760](sequences/gap-record-locations/README.md) | n < 10^9 | 37 |
+| 3 | [Four cubes](archive/exploratory-sequences/power-balance-p3/README.md) | n <= 300000 | 25 |
+| 4 | [Four fourth powers](archive/exploratory-sequences/power-balance-p4/README.md) | n <= 500000 | 8 |
+| 5 | [Four fifth powers](archive/exploratory-sequences/power-balance-p5/README.md) | n <= 800000 | 4 |
+| 6 | [Four sixth powers](archive/exploratory-sequences/power-balance-p6/README.md) | n <= 9000000 | 3 |
+| 7 | [Four seventh powers](archive/exploratory-sequences/power-balance-p7/README.md) | n <= 40000000 | 3 |
+
+[Explore all six sequences in the family viewer](https://nmicic.github.io/four-square-balance/viz/power-balance/balance.html).
+
+## Extra Observations
+
+[extra-observations/EXTRA_OBSERVATIONS.md](extra-observations/EXTRA_OBSERVATIONS.md)
+lists all six sequences at the viewer bounds and gives short proofs for the
+p = 2 member: the 96 and 2816 cores share one projected direction, the
+canonical tuple doubles for even n, and the record sequence is infinite. It
+also restates Legendre's three-square condition in `(v2(n), u)` form. The
+bounded checks are reproduced by a standard-library Python script:
+
+    python3 extra-observations/verify_observations.py
+    python3 extra-observations/verify_observations.py --full
+
 ## Archive
 
-`archive/` contains exploratory companion sequences and code that are not part of
-the gap-record-location submission. They are kept for reproducibility context, but
-the active repository surface is intentionally focused on the single sequence above.
-This includes the p = 3..7 analogues of A396760 for sums of four p-th powers
-(`archive/exploratory-sequences/power-balance-p3/` … `power-balance-p7/`, visualized
-in `viz/power-balance/`); they are documented for reference, not submitted to the OEIS.
+`archive/` holds the p = 3..7 data and programs, and other exploratory
+companion sequences and code. The family table above links to each
+higher-power member. Only the p = 2 sequence is in the OEIS.
 
 ## License
 
