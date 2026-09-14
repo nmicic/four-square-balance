@@ -63,6 +63,10 @@ completeness statement.
   marks rows as `exhaustive`, `scan-1e9`, or `chain-conj`.
 - `src/gap_table.py` — generator for the dense per-n companion CSV
   `data/gap_table_1_20000.csv`.
+- `loda/A396760.asm` — [LODA](https://loda-lang.org) assembly program for
+  A396760, in the format used by the loda-programs collection. It stores
+  a(1)..a(9) and applies the observed recurrence a(n) = 4*a(n-3) for n >= 10.
+  See `loda/README.md`; `sh loda/check.sh` verifies it against the b-file.
 
 Build and run the C checks:
 

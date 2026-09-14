@@ -36,6 +36,11 @@ exceeds all previous values.
 For a reproducibility self-test and the observed chain construction, see
 `../../src/records.gp`.
 
+`../../loda/A396760.asm` is a [LODA](https://loda-lang.org) program for the same
+terms: it stores a(1)..a(9) and applies the observed recurrence
+a(n) = 4*a(n-3) for n >= 10, the three-chain structure below in recurrence
+form. See `../../loda/README.md`.
+
 ## Observed Structure
 
 The verified terms below 10^9 are reproduced by the initial records
